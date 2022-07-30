@@ -16,6 +16,11 @@ inputs:
     required: false
     defaults: false
     type: boolean
+  saveLog:
+    description: 'Save log files.'
+    required: false
+    defaults: true
+    type: boolean
 runs:
   using: 'composite'
   steps:
@@ -29,7 +34,14 @@ runs:
         cd "${{ inputs.workingDirectory }}"
         for pkg in ${{ inputs.path }}; do
           echo "Notarizing $pkg"
-          xcrun notarytool submit "$pkg" --keychain-profile AC_PASSWORD --wait
+          xcrun notarytool submit "$pkg" --keychain-profile AC_PASSWORD --wait | tee submit.out
+          id=$(awk '$1=="id:"{id=$2} END{print id}' submit.out)
+          if ! grep -q 'status: Accepted' submit.out; then
+            xcrun notarytool log "$id" --keychain-profile AC_PASSWORD ${pkg}.notarylog.json
+            cat ${pkg}.notarylog.json
+          elif test "${{ inputs.saveLog }}" != false; then
+            xcrun notarytool log "$id" --keychain-profile AC_PASSWORD ${pkg}.notarylog.json
+          fi
         done
     - name: Staple
       if: ${{ runner.os == 'macOS' }}
@@ -43,6 +55,8 @@ runs:
         for pkg in ${{ inputs.path }}; do
           case "$pkg" in
             *.zip)
+              ;;
+            *.notarylog.json)
               ;;
             *)
               xcrun stapler staple "$pkg"
