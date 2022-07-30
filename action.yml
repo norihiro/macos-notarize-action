@@ -1,0 +1,51 @@
+name: 'Package plugin'
+description: 'Packages the plugin for specified architecture and build config.'
+inputs:
+  path:
+    description: 'Single or multiple files to codesign.'
+    required: true
+  keychainProfile:
+    description: 'Keychain profile for xcrun.'
+    required: true
+  workingDirectory:
+    description: 'Working directory.'
+    required: false
+    defaults: .
+  verbose:
+    description: 'Enable printing command lines.'
+    required: false
+    defaults: false
+    type: boolean
+runs:
+  using: 'composite'
+  steps:
+    - name: Notarize
+      if: ${{ runner.os == 'macOS' }}
+      shell: bash
+      run: |
+        if test "${{ inputs.verbose }}" != false; then
+          set -x
+        fi
+        cd "${{ inputs.workingDirectory }}"
+        for pkg in ${{ inputs.path }}; do
+          echo "Notarizing $pkg"
+          xcrun notarytool submit "$pkg" --keychain-profile AC_PASSWORD --wait
+        done
+    - name: Staple
+      if: ${{ runner.os == 'macOS' }}
+      shell: bash
+      run: |
+        if test "${{ inputs.verbose }}" != false; then
+          export VERBOSE=1
+          set -x
+        fi
+        cd "${{ inputs.workingDirectory }}"
+        for pkg in ${{ inputs.path }}; do
+          case "$pkg" in
+            *.zip)
+              ;;
+            *)
+              xcrun stapler staple "$pkg"
+              ;;
+          esac
+        done
